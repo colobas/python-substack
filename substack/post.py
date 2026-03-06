@@ -5,7 +5,9 @@ Post Utilities
 """
 
 import json
+import random
 import re
+import string
 from typing import Dict, List, Optional
 
 __all__ = ["Post", "parse_inline"]
@@ -105,6 +107,24 @@ def _pm_footnote(footnote_text: str) -> Dict:
     }
 
 
+def _new_latex_id(n: int = 10) -> str:
+    # Observed ids look like uppercase alpha strings (e.g. "CYTDOISRRI").
+    alphabet = string.ascii_uppercase
+    return "".join(random.choice(alphabet) for _ in range(n))
+
+
+def _pm_latex_block(expr: str) -> Dict:
+    # Substack uses `latex_block` with attrs.persistentExpression.
+    return {
+        "type": "latex_block",
+        "attrs": {
+            "persistentExpression": expr,
+            "id": _new_latex_id(),
+            "dirty": True,
+        },
+    }
+
+
 def _parse_inline_nodes(text: str, footnotes: Dict[str, str]) -> List[Dict]:
     """Parse a single-line markdown string into Substack/ProseMirror inline nodes.
 
@@ -155,15 +175,6 @@ def _parse_inline_nodes(text: str, footnotes: Dict[str, str]) -> List[Dict]:
                 i += m.end()
                 continue
 
-        # Inline math: $...$
-        if text[i] == "$" and (i == 0 or text[i - 1] != "\\"):
-            j = text.find("$", i + 1)
-            if j != -1:
-                latex = text[i + 1 : j]
-                flush_buf()
-                out.append({"type": "math_inline", "attrs": {"latex": latex}})
-                i = j + 1
-                continue
 
         # Bold: **...**
         if text.startswith("**", i):
@@ -563,7 +574,7 @@ class Post:
             if block["type"] == "math":
                 latex = block.get("content", "").strip()
                 if latex:
-                    self.draft_body["content"].append({"type": "math_display", "attrs": {"latex": latex}})
+                    self.draft_body["content"].append(_pm_latex_block(latex))
                 continue
 
             text_content = block.get("content", "").strip("\n")
