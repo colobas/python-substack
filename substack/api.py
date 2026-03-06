@@ -96,15 +96,25 @@ class Api:
             user_publications = self.get_user_publications()
             # search through publications to find the publication with the matching subdomain
             for publication in user_publications:
-                if publication["subdomain"] == subdomain:
+                if publication.get("subdomain") == subdomain:
                     # set the current publication to the users publication
                     user_publication = publication
                     break
+
+            # Some accounts (e.g. reader-only accounts or newer API responses)
+            # may return an empty publicationUsers list even though the user
+            # can still author posts for a given publication. In that case,
+            # fall back to the provided publication_url directly.
+            if user_publication is None:
+                user_publication = {
+                    "subdomain": subdomain,
+                    "publication_url": publication_url,
+                }
         else:
             # get the users primary publication
             user_publication = self.get_user_primary_publication()
 
-        # set the current publication to the users primary publication
+        # set the current publication
         self.change_publication(user_publication)
 
     @staticmethod
@@ -169,13 +179,19 @@ class Api:
         return output
 
     def change_publication(self, publication):
-        """
-        Change the publication URL
+        """Change the active publication.
+
+        This primarily sets `self.publication_url` (the API base for the
+        publication).
+
+        Some callers may provide only a minimal publication dict containing
+        `publication_url` and (optionally) `subdomain`.
         """
         self.publication_url = urljoin(publication["publication_url"], "api/v1")
 
-        # sign-in to the publication
-        self.signin_for_pub(publication)
+        # sign-in to the publication (best-effort)
+        if publication.get("subdomain"):
+            self.signin_for_pub(publication)
 
     def export_cookies(self, path: str = "cookies.json"):
         """
